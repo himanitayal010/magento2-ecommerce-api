@@ -1,0 +1,264 @@
+<?php 
+namespace Magneto\Ecommerceapi\Controller\MyorderDetails;
+use Magento\Framework\App\CsrfAwareActionInterface;
+use Magento\Framework\App\Request\InvalidRequestException;
+use Magento\Framework\App\RequestInterface;
+
+
+class Index extends \Magento\Framework\App\Action\Action implements CsrfAwareActionInterface{
+
+    public function createCsrfValidationException(RequestInterface $request): ?InvalidRequestException {
+        return null;
+    }
+    
+    public function validateForCsrf(RequestInterface $request): ?bool{
+        return true;
+    } 
+	public function execute() { 
+
+		$customerId = $_REQUEST["customerId"];
+		$langId = $_REQUEST["langId"];
+		$currencyId = $_REQUEST["curId"]; 
+
+		$objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+		$currencysymbol = $objectManager->get('Magento\Directory\Model\Currency')->getCurrencySymbol();
+		$storeManager = $objectManager->get('\Magento\Store\Model\StoreManagerInterface');
+		$storeId =$storeManager->getStore()->getStoreId();
+
+		$store = $objectManager->get('Magento\Store\Model\StoreManagerInterface')->getStore();
+		$lastyear = date('Y-m-d', strtotime("-2 year"));
+
+		$orderCollection = $objectManager->create('\Magento\Sales\Model\ResourceModel\Order\Collection');
+		$orderData = $orderCollection->addAttributeToFilter('customer_id',$customerId)
+		->addAttributeToFilter('status','pending')
+		->addAttributeToFilter('created_at', array('gteq'  => $lastyear))->load();
+
+		$generalUISettings = array('mediaType' =>'1',
+							       'backgroundMediaData'=>'#f6f6f6',
+								   'navDividerColor'=>'#DEDEDE',
+								   'orderIdBlockBackgroundColor'=>'#ffffff',
+			 'orderIdText'=> array('textColor' =>'#666666',
+								   'font'=>'1',
+								   'fontSize'=>'36px')); 
+		if(empty($orderData)){
+			$reponse = array('status' =>'Error',
+							'statusCode'=>300,
+							'message'=>'NO data found!');
+			echo json_encode($response);
+		}
+		foreach ($orderData as $_order){
+
+			$oId =  $_order->getEntityId();
+			$orderIdText = "ORDER ID:".$oId."";
+			$subText = $_order->getTotalQtyOrdered()." Items "." Bill Amount: ".$_order->getTotalPaid()."";
+			$shippingaddress = $_order->getShippingAddress()->getData();
+			$postCode = $_order->getShippingAddress()->getData("postcode");
+			$region = $_order->getShippingAddress()->getData("region");
+			$street = $_order->getShippingAddress()->getData("street");
+			$firstname = $_order->getShippingAddress()->getData("firstname");
+			$lastname = $_order->getShippingAddress()->getData("lastname");
+			$country = $_order->getShippingAddress()->getData("country_id");
+			$telephone = $_order->getShippingAddress()->getData("telephone");
+			$city = $_order->getShippingAddress()->getData("city");
+			$totalPrice = $_order->getGrandTotal(); 
+			$taxamount = $_order->getBaseTaxAmount();
+			$subtotalprice = $_order->getSubtotal();
+			$CreatedAt = date("M-d-y",strtotime($_order->getCreatedAt()));
+			$payment = $_order->getPayment();
+			$method = $payment->getMethodInstance();
+			$methodTitle = $method->getTitle();
+			$TotalItemCount = $_order->getTotalItemCount();
+			
+			foreach ($_order->getAllVisibleItems() as $_item) { 
+
+				$itemId = $_item->getProductId(); 
+				$productName = $_item->getName();
+				$status = $_order->getStatus();
+				$proImage = $store->getBaseUrl(\Magento\Framework\UrlInterface::URL_TYPE_MEDIA) . 'catalog/product' .$_item->getProduct()->getImage();
+				$sku = $_item->getSku();
+				$qty = $_item->getQtyOrdered();
+				$price1 = $_item->getPrice();
+				if($price1 == ''){
+					$price1 = "";
+				}else{
+					$price1 = $price1.' '.$currencysymbol;
+				}
+				$priceoffered = $_item->getSpecialPrice();
+				if($priceoffered == ''){
+					$priceoffered = "";
+				}else{
+					$priceoffered = $priceoffered.' '.$currencysymbol;
+				}
+				$additionalText = /*$price1 - $priceoffered*/"";
+				if($priceoffered == ''){
+					$additionalText = ""; 
+				}else{
+					$additionalText = 'You save'.' '.$additionalText.' '.$currencysymbol;
+				}
+
+				$firstname1 = array('text' => $firstname);
+				$lastname1 = array('text' => $lastname);
+				$street1 = array('text' => $street);
+				$region1 = array('text' => $region);
+				$city1 = array('text' => $city);
+				$country1 = array('text' => $country);
+				$postCode1 = array('text' => $postCode);
+				$telephone1 = array('text' => $telephone);
+				$ShippingAddres=$street.','.$region.', '.$city.', '.$postCode.', '.$country.', '.$telephone;
+				$customerFullname = array('FirstName' => $firstname,'LastName'=>$lastname,'ShippingAddress'=>$ShippingAddres);
+
+				$addressdataAll = array($firstname1,$lastname1,$street1,$region1,$city1,$country1,$postCode1,$telephone1); 
+				$addressdataAll1 = array('address'=>$addressdataAll);
+				$addressdataAll2 = array($addressdataAll1);
+				$address = array('componentId' =>'address',
+					'sequenceId'=>'1',
+					'isActive'=>'1',
+					'addressUISettings'=>array(),
+					'ShiipingCustomerDetail'=>$customerFullname,
+					'addressData'=> array('list' =>$addressdataAll2));
+				$orderId = array('componentId' =>'orderId',
+					'sequenceId'=>'1',
+					'isActive'=>'1',
+					'orderIdUISettings'=> array('isShadow' =>'1',
+						'shadowColor'=>'#a4a4a4',
+						'backgroundColor'=>'#ffffff'),
+					'orderIdData'=>array('orderId' =>$orderIdText,'CreatedAt'=>$CreatedAt,"PaymentMethod"=>$methodTitle)); 
+
+
+				$purchasedProductall[] = array('id' =>$itemId, 
+					'image'=>$proImage,
+					'title'=>$productName,
+					'subTitle'=>$sku,
+					'price'=>$price1,
+					'discountPrice'=>$priceoffered,
+					'additionalText'=>$additionalText,
+					'qty'=>$qty,
+					'status'=>$status, 
+					'statusCode'=>'1');
+
+				$purchasedProductData = array('list' =>$purchasedProductall);
+
+				$purchasedProductUISettings= array('isShadow' =>'1',
+					'mediaType'=>'1',
+					'scratchLineWidth'=>'1',
+					'backgroundMediaData'=>'#ffffff',
+					'divBackgroundColor'=>'#ffffff',
+					'dividerColor'=>'#dedede',
+					'productName'=>array('textColor' =>'#212121',
+						'font'=>'2', 
+						'fontSize'=>'42px',
+						'fontWeight'=>'600'),
+					'subTitle'=>array('textColor' =>'#666666',
+						'font'=>'2',
+						'fontSize'=>'30px'),
+					'price'=>array('textColor' =>'#212121',
+						'font'=>'2',
+						'fontSize'=>'42px',
+						'fontWeight'=>'600'),
+					'productImage'=>array('isShadow' =>'1',
+						'backgroundColor'=>'#ffffff'),
+					'discountPrice'=>array('textColor' =>'#e6201a',
+						'font'=>'2',
+						'fontSize'=>'30px'),
+					'additionalText'=>array('textColor' =>'#3db75e',
+						'font'=>'2',
+						'fontSize'=>'30px'),
+					'buttonQty'=>array('textColor' =>'#666666',
+						'font'=>'2',
+						'fontSize'=>'30px',
+						'backgroundColor'=>'#ffffff',
+						'isShadow'=>'1',
+						'arrowColor'=>'#666666'));  
+
+				$purchasedProduct = array('componentId' =>'purchasedProduct',
+					'sequenceId'=>'1',
+					'isActive'=>'1',
+					'purchasedProductUISettings'=>$purchasedProductUISettings,
+					'purchasedProductData'=>$purchasedProductData); 
+
+				$priceDetailsUISetting = array('backgroundColor' =>'#ffffff',
+					'dividerColor'=>'#dedede',
+					'isShadow'=>'1',
+					'title'=>array('textColor' =>'#666666',
+						'font'=>'2',
+						'fontSize'=>'36px',
+						'fontWeight'=>'600'),
+					'leftTextDetails'=>array('textColor' =>'#666666',
+						'font'=>'1',
+						'fontSize'=>'36px'),
+					'rightTextDetails'=>array('textColor' =>'#666666',
+						'font'=>'1',
+						'fontSize'=>'36px'), 
+					'payableAmountText'=>array('textColor' =>'#212121',
+						'font'=>'2',
+						'fontSize'=>'36px',
+						'fontWeight'=>'600'));
+
+				$price =array('leftText' =>'Price ('.$TotalItemCount.' item)','rightText'=>$subtotalprice);
+
+				$tax =array('leftText' =>'Tax','rightText'=>$taxamount);
+
+				$delivery =array('leftText' =>'Delivery','rightText'=>'FREE');
+
+				$option = array($price,$tax,$delivery);
+
+				$priceDetailsData = array('title' =>'Price Details',
+					'payableAmountLable'=>'Amount Payable',
+					'payableAmount'=>$totalPrice,
+					'listData'=>$option);
+
+				$priceDetails = array('componentId' =>'priceDetails',
+					'sequenceId'=>'1',
+					'isActive'=>'1', 
+					'priceDetailsUISetting'=>$priceDetailsUISetting,
+					'priceDetailsData'=>$priceDetailsData);
+
+				$royaltyPointsUISettings = array('isShadow' =>'1',
+					'shadowColor'=>'#a4a4a4',
+					'backgroundColor'=>'#ffffff',
+					'title'=> array('textColor' =>'#666666',
+						'font'=>'2',
+						'fontSize'=>'36px',
+						'fontWeight'=>'600'),
+					'subTitle'=> array('textColor' =>'#666666',
+						'font'=>'1',
+						'fontSize'=>'36px'));  
+				$subtitle = $totalPrice/10;
+
+				$royaltyPointsData = array('title' =>'Your rewards on this order',
+					'subTitle'=>$subtitle,
+					'img'=>'');
+
+				$royaltyPoints = array('componentId' =>'royaltyPoints',
+					'sequenceId'=>'1',
+					'isActive'=>'1',
+					'royaltyPointsUISettings'=>$royaltyPointsUISettings,
+					'royaltyPointsData'=>$royaltyPointsData); 
+
+				$componentall = array($orderId,$address,$purchasedProduct,$priceDetails,$royaltyPoints);
+			} 
+		} 	
+		$customer_check = $objectManager->get('Magento\Customer\Model\Customer');
+		$customer_check->load($customerId); 
+		if ( $customer_check->getId()) { 
+			$status = array('status' =>'OK',
+				'statusCode'=>200,
+				'id'=>$customerId,
+				'langId'=>$storeId,
+				'isUpdateUISettingFlag'=>'0',
+				'message'=>'Success',
+				'generalUISettings'=>$generalUISettings,
+				'component'=>$componentall); 
+
+			echo $status1 = json_encode($status,JSON_UNESCAPED_SLASHES);   
+
+		}else{
+			$status = array('status' =>'OK',
+				'statusCode'=>230,
+				'langId'=>$storeId,
+				'message'=>'Please login to check order');  
+
+			echo $status1 = json_encode($status,JSON_UNESCAPED_SLASHES); 
+		}
+	}   
+}

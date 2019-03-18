@@ -1,0 +1,103 @@
+<?php 
+namespace Magneto\Ecommerceapi\Controller\Allreview; 
+
+class Index extends \Magento\Framework\App\Action\Action
+{
+	public function execute() 
+    {
+
+          $customerId = $_POST["customerId"];  
+          $productId = $_POST["productId"]; 
+          $langId = $_POST["langId"];
+          $currencyId = $_POST["curId"];
+
+
+          $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+          $storeManager = $objectManager->get('\Magento\Store\Model\StoreManagerInterface');
+          $storeId =$storeManager->getStore()->getStoreId();
+          $store = $objectManager->get('Magento\Store\Model\StoreManagerInterface')->getStore();
+
+          $generalUISettings = array('mediaType' =>'1',
+                                     'backgroundMediaData'=>'#f6f6f6',
+                                     'navDividerColor'=>'#DEDEDE'); 
+       
+          $allReviewsUISettings = array('backgroundColor'=>'#ffffff', 
+                                        'isShadow'=>'1',
+                                        'dividerColor'=>'#dedede',
+                                        'selectedRating'=>'#2a8afb',
+                                        'unselectedRating'=>'#f0f0f0',
+                 'reviewTitle' => array('textColor' =>'#212121', 
+                                        'font'=>'2',
+                                        'fontSize'=>'15'),
+               'reviewContent' => array('textColor' =>'#666666',
+                                        'font'=>'1',
+                                        'fontSize'=>'14'),
+              'reviewFromText' => array('textColor' =>'#212121',
+                                        'font'=>'2',
+                                        'fontSize'=>'13'),
+                  'reviewDate' => array('textColor' =>'#666666',
+                                        'font'=>'2',
+                                        'fontSize'=>'13')); 
+
+              $rating = $objectManager->get("Magento\Review\Model\ResourceModel\Review\CollectionFactory");
+
+              $rating->setPageSize($pageSize);
+              $rating->setCurPage($page);
+              $total_pages = $rating->getLastPageNumber();
+              
+      	      $collection = $rating->create()
+                                   ->addStatusFilter(\Magento\Review\Model\Review::STATUS_APPROVED)->addEntityFilter('product',$productId)->setDateOrder(); 
+          		foreach ($collection as $item){
+
+
+            $reviewFactory = $objectManager->create('Magento\Review\Model\Review');
+            $product = $objectManager->create('Magento\Catalog\Model\Product')->load($productId);
+            $storeManager  = $objectManager->create('\Magento\Store\Model\StoreManagerInterface');
+            $storeId = $storeManager->getStore()->getStoreId();
+            $reviewFactory->getEntitySummary($product, $storeId);
+
+            $ratingSummary = $product->getRatingSummary()->getRatingSummary();
+            $reviewCount = $product->getRatingSummary()->getReviewsCount();
+            $ratingSummary1 = ($ratingSummary / 20);
+
+          	     $reviewid =$item->getReviewId();
+          	     $reviewTitlekk = $item->getTitle();
+          	     $reviewDetail = $item->getDetail();
+          	     $reviewFrom = $item->getNickname();
+          	     $reviewDatedata = $item->getCreatedAt();
+
+                       $reviewallDataCombine1[] = array('rating' =>''.$ratingSummary1.'',
+                                                        'reviewTitle'=>$reviewTitlekk,
+                                                        'reviewContent'=>$reviewDetail,
+                                                        'reviewFromText'=>$reviewFrom,
+                                                        'reviewDate'=>$reviewDatedata);  
+
+                      $reviewData = array('list'=>$reviewallDataCombine1); 
+            
+                      $productAllReview = array('componentId' =>'allReview',
+                                                'sequenceId'=>'1',
+                                                'isActive'=>'1',
+                                                'allReviewUISettings'=>$allReviewsUISettings,
+                                                'allReviewData'=>$reviewData); 
+                  $component1 = array($productAllReview);
+                  } 
+              if(empty($component1)){
+                $status = array('status' =>'OK',
+                                'statusCode'=>300,
+                                'message'=>'No Data Found!'); 
+
+              echo json_encode($status); 
+            }else{
+              $status = array('status' =>'OK',
+                              'statusCode'=>200,
+                              'id'=>$customerId,
+                              'langId'=>$storeId,
+                              'message'=>'Success',
+                              'generalUISettings'=>$generalUISettings,
+                              'component'=>$component1); 
+
+              echo json_encode($status,JSON_UNESCAPED_SLASHES);
+              } 
+          }   
+      }
+       
